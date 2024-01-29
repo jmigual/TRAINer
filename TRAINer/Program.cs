@@ -9,22 +9,26 @@ class Program
             name: "--data",
             description: "Location of the directory where the OpenStreetMap data is stored", parseArgument: result =>
             {
+                // Get current directory
+                string path;
+
                 if (result.Tokens.Count == 0)
                 {
-                    var defaultPath = new DirectoryInfo(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "data"));
-                    Console.Error.WriteLine($"Using default location of {defaultPath}");
-                    return defaultPath;
+                    path = Path.Combine(Environment.CurrentDirectory, "data");
+                    Console.Error.WriteLine($"Using default location of {path}");
+                }
+                else
+                {
+                    path = result.Tokens.Single().Value;
                 }
 
-                string? filePath = result.Tokens.Single().Value;
-
-                if (!Directory.Exists(filePath))
+                if (!Directory.Exists(path))
                 {
-                    result.ErrorMessage = $"Directory {filePath} does not exist";
+                    result.ErrorMessage = $"Directory {path} does not exist";
                     return null;
                 }
 
-                return new DirectoryInfo(filePath);
+                return new DirectoryInfo(path);
             }, isDefault: true);
         var rootCommand = new RootCommand("Sample app for System.CommandLine");
         rootCommand.AddOption(dataOption);
@@ -60,10 +64,10 @@ class Program
             Console.WriteLine($"Processing {file.FullName}");
             using var stream = file.OpenRead();
 
-            // Read the first 4 bytes and parse them as an int
+            // Read the first 4 bytes in big endian order
             var lengthBytes = new byte[4];
             stream.Read(lengthBytes, 0, 4);
-            var length = BitConverter.ToInt32(lengthBytes, 0);
+            var length = BitConverter.ToInt32(lengthBytes.Reverse().ToArray(), 0);
 
             Console.WriteLine($"Length: {length}");
 
@@ -75,6 +79,19 @@ class Program
             using var blobStream = new MemoryStream(blobBytes);
             var blobHeader = BlobHeader.Parser.ParseFrom(blobStream);
             Console.WriteLine($"Blob type: {blobHeader.Type}");
+            Console.WriteLine($"Blob index data: {blobHeader.Indexdata.ToString()}");
+            Console.WriteLine($"Blob data size: {blobHeader.Datasize}");
+
+            // Now read the blob data
+            var blobDataBytes = new byte[blobHeader.Datasize];
+            stream.Read(blobDataBytes, 0, blobHeader.Datasize);
+
+            // Now parse the blob data
+            using var blobDataStream = new MemoryStream(blobDataBytes);
+            var blobData = Blob.Parser.ParseFrom(blobDataStream);
+            Console.WriteLine($"Blob data raw size: {blobData.RawSize}");
+            Console.WriteLine($"Blob data zlib data size: {blobData.HasZlibData}");
+
         }
 
     }
