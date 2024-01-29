@@ -79,7 +79,7 @@ class Program
             using var blobStream = new MemoryStream(blobBytes);
             var blobHeader = BlobHeader.Parser.ParseFrom(blobStream);
             Console.WriteLine($"Blob type: {blobHeader.Type}");
-            Console.WriteLine($"Blob index data: {blobHeader.Indexdata.ToString()}");
+            Console.WriteLine($"Blob index data length: {blobHeader.Indexdata.Length}");
             Console.WriteLine($"Blob data size: {blobHeader.Datasize}");
 
             // Now read the blob data
