@@ -49,7 +49,7 @@ class Program
     internal static void Process(DirectoryInfo dataFolder)
     {
         // Find raw rails file. You can generate it from the OSM data using osmium
-        // osmium tags-filter railway -o rails.osm.pbf planet-latest.osm.pbf "r/admin_level=2,4" --output-format pbf,add_metadata=false
+        // osmium tags-filter -o rails.osm.pbf planet-latest.osm.pbf railway "r/admin_level=2,4" --output-format pbf,add_metadata=false
         var file = new FileInfo(Path.Combine(dataFolder.FullName, "raw", "rails.osm.pbf"));
 
         if (!file.Exists)
