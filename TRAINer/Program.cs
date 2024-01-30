@@ -81,12 +81,9 @@ class Program
                 }
 
                 Dictionary<string, string> tags = [];
-                if (node.Tags != null)
+                if (node.Tags != null && node.Tags.TryGetValue("railway", out var railway))
                 {
-                    if (node.Tags.TryGetValue("railway", out var railway))
-                    {
-                        tags.Add("railway", railway);
-                    }
+                    tags.Add("railway", railway);
                 }
 
                 var ourNode = new Node(node.Id.Value, node.Latitude.Value, node.Longitude.Value, node.Tags);
@@ -101,13 +98,9 @@ class Program
                 }
 
                 Way? ourWay = null;
-
-                if (way.Tags != null)
+                if (way.Tags != null && way.Tags.ContainsKey("railway"))
                 {
-                    if (way.Tags.ContainsKey("railway"))
-                    {
-                        ourWay = new RailWay(way.Id.Value, way.Nodes, way.Tags);
-                    }
+                    ourWay = new RailWay(way.Id.Value, way.Nodes, way.Tags);
                 }
 
                 ways.Add(ourWay ?? new Way(way.Id.Value, way.Nodes, way.Tags));
