@@ -49,7 +49,7 @@ class Program
     internal static void Process(DirectoryInfo dataFolder)
     {
         // Find raw rails file. You can generate it from the OSM data using osmium
-        // osmium tags-filter railway -o rails.osm.pbf planet-latest.osm.pbf --output-format pbf,add_metadata=false
+        // osmium tags-filter railway -o rails.osm.pbf planet-latest.osm.pbf "r/admin_level=2,4" --output-format pbf,add_metadata=false
         var file = new FileInfo(Path.Combine(dataFolder.FullName, "raw", "rails.osm.pbf"));
 
         if (!file.Exists)
@@ -61,7 +61,6 @@ class Program
         var (nodes, ways) = GetData(file);
 
         // Now we need to paint the data
-        // Task.Run(() => Application.Run(new Form1()));
     }
 
     internal static (Dictionary<long, Node> nodes, Way[] ways) GetData(FileInfo file)
@@ -101,7 +100,17 @@ class Program
                     continue;
                 }
 
-                ways.Append(new Way(way.Id.Value, way.Nodes, way.Tags));
+                Way? ourWay = null;
+
+                if (way.Tags != null)
+                {
+                    if (way.Tags.ContainsKey("railway"))
+                    {
+                        ourWay = new RailWay(way.Id.Value, way.Nodes, way.Tags);
+                    }
+                }
+
+                ways.Add(ourWay ?? new Way(way.Id.Value, way.Nodes, way.Tags));
             }
 
             if (++count % 200000 == 0)
