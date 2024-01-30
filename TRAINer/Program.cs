@@ -64,27 +64,14 @@ class Program
             Console.WriteLine($"Processing {file.FullName}");
             using var stream = file.OpenRead();
 
-            // Read the first 4 bytes in big endian order
-            var lengthBytes = new byte[4];
-            stream.Read(lengthBytes, 0, 4);
-            var length = BitConverter.ToInt32(lengthBytes.Reverse().ToArray(), 0);
+            var fileBlobHeader = FileBlobHeader.Parse(stream);
 
-            Console.WriteLine($"Length: {length}");
-
-            // Now read as many bytes as the length we just read
-            var blobBytes = new byte[length];
-            stream.Read(blobBytes, 0, length);
-
-            // Now parse the blob header
-            using var blobStream = new MemoryStream(blobBytes);
-            var blobHeader = BlobHeader.Parser.ParseFrom(blobStream);
-            Console.WriteLine($"Blob type: {blobHeader.Type}");
-            Console.WriteLine($"Blob index data length: {blobHeader.Indexdata.Length}");
-            Console.WriteLine($"Blob data size: {blobHeader.Datasize}");
+            Console.WriteLine($"Blob type: {fileBlobHeader.Type}");
+            Console.WriteLine($"Blob data size: {fileBlobHeader.Datasize}");
 
             // Now read the blob data
-            var blobDataBytes = new byte[blobHeader.Datasize];
-            stream.Read(blobDataBytes, 0, blobHeader.Datasize);
+            var blobDataBytes = new byte[fileBlobHeader.Datasize];
+            stream.Read(blobDataBytes, 0, fileBlobHeader.Datasize);
 
             // Now parse the blob data
             using var blobDataStream = new MemoryStream(blobDataBytes);
