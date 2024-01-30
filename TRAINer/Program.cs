@@ -1,5 +1,6 @@
 ﻿using System.CommandLine;
-using OSMPBF;
+using OsmSharp.Streams;
+using TRAINer.Data;
 
 class Program
 {
@@ -47,39 +48,67 @@ class Program
 
     internal static void Process(DirectoryInfo dataFolder)
     {
-        // Create folder if it doesn't exist
-        var rawDataFolder = new DirectoryInfo(Path.Combine(dataFolder.FullName, "raw"));
+        // Find raw rails file. You can generate it from the OSM data using osmium
+        // osmium tags-filter railway -o rails.osm.pbf planet-latest.osm.pbf --output-format pbf,add_metadata=false
+        var file = new FileInfo(Path.Combine(dataFolder.FullName, "raw", "rails.osm.pbf"));
 
-        if (!rawDataFolder.Exists)
+        if (!file.Exists)
         {
-            Console.Error.WriteLine($"Missing raw data folder {rawDataFolder.FullName}");
+            Console.Error.WriteLine($"Missing raw rails file {file.FullName}");
+            return;
         }
 
-        // Find files ending in .osm.pbf
-        var files = rawDataFolder.EnumerateFiles("*.osm.pbf", SearchOption.AllDirectories);
+        var (nodes, ways) = GetData(file);
 
-        Console.WriteLine($"Found {files.Count()} files");
-        foreach (var file in files)
+        // Now we need to paint the data
+        // Task.Run(() => Application.Run(new Form1()));
+    }
+
+    internal static (Dictionary<long, Node> nodes, Way[] ways) GetData(FileInfo file)
+    {
+        Dictionary<long, Node> nodes = [];
+        List<Way> ways = [];
+
+        var source = new PBFOsmStreamSource(file.OpenRead());
+        int count = 0;
+        foreach (var element in source)
         {
-            Console.WriteLine($"Processing {file.FullName}");
-            using var stream = file.OpenRead();
+            if (element.Type == OsmSharp.OsmGeoType.Node)
+            {
+                var node = (OsmSharp.Node)element;
+                if (node == null || node.Id == null || node.Latitude == null || node.Longitude == null)
+                {
+                    continue;
+                }
 
-            var fileBlobHeader = FileBlobHeader.Parse(stream);
+                Dictionary<string, string> tags = [];
+                if (node.Tags != null)
+                {
+                    if (node.Tags.TryGetValue("railway", out var railway))
+                    {
+                        tags.Add("railway", railway);
+                    }
+                }
 
-            Console.WriteLine($"Blob type: {fileBlobHeader.Type}");
-            Console.WriteLine($"Blob data size: {fileBlobHeader.Datasize}");
+                var ourNode = new Node(node.Id.Value, node.Latitude.Value, node.Longitude.Value, node.Tags);
+                nodes.Add(node.Id.Value, ourNode);
+            }
+            else if (element.Type == OsmSharp.OsmGeoType.Way)
+            {
+                var way = (OsmSharp.Way)element;
+                if (way == null || way.Id == null)
+                {
+                    continue;
+                }
 
-            // Now read the blob data
-            var blobDataBytes = new byte[fileBlobHeader.Datasize];
-            stream.Read(blobDataBytes, 0, fileBlobHeader.Datasize);
+                ways.Append(new Way(way.Id.Value, way.Nodes, way.Tags));
+            }
 
-            // Now parse the blob data
-            using var blobDataStream = new MemoryStream(blobDataBytes);
-            var blobData = Blob.Parser.ParseFrom(blobDataStream);
-            Console.WriteLine($"Blob data raw size: {blobData.RawSize}");
-            Console.WriteLine($"Blob data zlib data size: {blobData.HasZlibData}");
-
+            if (++count % 200000 == 0)
+            {
+                Console.Error.WriteLine($"Processed {count} elements");
+            }
         }
-
+        return (nodes, ways.ToArray());
     }
 }
