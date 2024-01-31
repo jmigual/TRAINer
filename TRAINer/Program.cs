@@ -50,7 +50,7 @@ class Program
     internal static void Process(DirectoryInfo dataFolder)
     {
         // Find raw rails file. You can generate it from the OSM data using osmium
-        // osmium tags-filter -o rails.osm.pbf planet-latest.osm.pbf railway "r/admin_level=2,4" --output-format pbf,add_metadata=false
+        // osmium tags-filter -o rails.osm.pbf -t --output-format pbf,add_metadata=false rails_bak.osm.pbf "w/railway=rail,subway,light_rail,tram,narrow_gauge,bridge,goods,monorail"
 
         // All railway types: rail, abandoned, subway, light_rail, razed, funicular, tram, narrow_gauge, disused, construction,
         // dismantled, platform, miniature, proposed, historic, overline_bridge, depot, workshop, monorail, roundhouse,
@@ -119,7 +119,7 @@ class Program
                     tags.Add("railway", railway);
                 }
 
-                var ourNode = new Node((float)node.Latitude.Value, (float)node.Longitude.Value, node.Tags);
+                var ourNode = new Node((float)node.Latitude.Value, (float)node.Longitude.Value);
                 nodes.Add(node.Id.Value, ourNode);
             }
             else if (element.Type == OsmSharp.OsmGeoType.Way)
