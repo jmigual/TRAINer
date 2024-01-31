@@ -24,7 +24,7 @@ A project about creating a beautiful map of trains for a selected area.
 
 1. Clone the repository
 2. Obtain the data from [OpenStreetMap](https://www.openstreetmap.org/) as an .osm.pbf file and save it in `data/raw`. You can use [Geofabrik](https://download.geofabrik.de/) to download the data.
-3. Filter the data. You can use [Osmosis](https://wiki.openstreetmap.org/wiki/Osmosis) to filter the data. The final file should be `data/raw/rail.osm.pbf` The following command will filter the data to only include railways and save it in `data/raw`:
+3. Filter the data. You can use [Osmium](https://osmcode.org/osmium-tool/) to filter the data. The final file should be `data/raw/rail.osm.pbf` The following command will filter the data to only include railways and save it in `data/raw`:
 ```shell
 # Obtain only railway related
 osmium tags-filter -o rail.osm.pbf -t --output-format pbf,add_metadata=false europe-latest.osm.pbf "w/railway=bridge,goods,light_rail,monorail,narrow_gauge,rail,subway,tram"
