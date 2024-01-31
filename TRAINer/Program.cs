@@ -2,6 +2,7 @@
 using System.Data;
 using OsmSharp.Streams;
 using SkiaSharp;
+using TRAINer.Config;
 using TRAINer.Data;
 using TRAINer.Geo;
 
@@ -11,7 +12,7 @@ class Program
     {
         var dataOption = new Option<DirectoryInfo?>(
             name: "--data",
-            description: "Location of the directory where the OpenStreetMap data is stored",
+            description: "Location of the directory where the OpenStreetMap data is stored. The program will look for the file <data>/raw/rails.osm.pbf.",
             parseArgument: result =>
             {
                 // Get current directory
@@ -62,33 +63,61 @@ class Program
             getDefaultValue: () => 180
         );
 
+        var colorMainOption = new Option<string>(
+            name: "--color-main",
+            description: "Color of the main line as hex value",
+            getDefaultValue: () => SKColors.RoyalBlue.ToString()
+        );
+
+        var colorSecondaryOption = new Option<string>(
+            name: "--color-secondary",
+            description: "Color of the secondary line as hex value",
+            getDefaultValue: () => SKColors.DarkGreen.ToString()
+        );
+
+        var colorBackgroundOption = new Option<string>(
+            name: "--color-background",
+            description: "Color of the background as hex value",
+            getDefaultValue: () => SKColors.White.ToString()
+        );
+
         var rootCommand = new RootCommand("Sample app for System.CommandLine");
         rootCommand.AddOption(dataOption);
         rootCommand.AddOption(minLatOption);
         rootCommand.AddOption(maxLatOption);
         rootCommand.AddOption(minLonOption);
         rootCommand.AddOption(maxLonOption);
+        rootCommand.AddOption(colorMainOption);
+        rootCommand.AddOption(colorSecondaryOption);
+        rootCommand.AddOption(colorBackgroundOption);
 
         rootCommand.SetHandler(
-            (data, minLat, maxLat, minLon, maxLon) =>
+            (data, minLat, maxLat, minLon, maxLon, mainColor, secondaryColor, backgroundColor) =>
             {
                 if (data == null)
                 {
                     Console.Error.WriteLine("No data directory specified");
                     return;
                 }
-                Process(data, new Limits(minLat, maxLat, minLon, maxLon));
+                Process(
+                    data,
+                    new Limits(minLat, maxLat, minLon, maxLon),
+                    new ColorPalette(mainColor, secondaryColor, backgroundColor)
+                );
             },
             dataOption,
             minLatOption,
             maxLatOption,
             minLonOption,
-            maxLonOption
+            maxLonOption,
+            colorMainOption,
+            colorSecondaryOption,
+            colorBackgroundOption
         );
         return await rootCommand.InvokeAsync(args);
     }
 
-    internal static void Process(DirectoryInfo dataFolder, Limits limits)
+    internal static void Process(DirectoryInfo dataFolder, Limits limits, ColorPalette colors)
     {
         // Find raw rails file. You can generate it from the OSM data using osmium
         // osmium tags-filter -o temp1.osm.pbf -t --output-format pbf,add_metadata=false europe-latest.osm.pbf "w/railway=bridge,goods,light_rail,monorail,narrow_gauge,rail,subway,tram"
@@ -144,7 +173,7 @@ class Program
         }
 
         var latexFile = new FileInfo(Path.Combine(output.FullName, "rails.png"));
-        PaintPng(latexFile, nodes, ways);
+        PaintPng(latexFile, nodes, ways, colors);
     }
 
     internal static (Dictionary<long, Node> nodes, Way[] ways) GetData(FileInfo file, Limits limits)
@@ -228,7 +257,12 @@ class Program
         return (nodes, arrWays);
     }
 
-    internal static void PaintPng(FileInfo file, Dictionary<long, Node> nodes, Way[] ways)
+    internal static void PaintPng(
+        FileInfo file,
+        Dictionary<long, Node> nodes,
+        Way[] ways,
+        ColorPalette colors
+    )
     {
         Console.Error.WriteLine($"Gauges: {RailWay.MinGauge} - {RailWay.MaxGauge}");
         Console.Error.WriteLine($"Speeds: {RailWay.MinSpeed} - {RailWay.MaxSpeed}");
@@ -239,9 +273,6 @@ class Program
         {
             converter.AddNode(node);
         }
-
-        var colorStart = SKColors.DarkGreen;
-        var colorEnd = SKColors.RoyalBlue;
 
         int count = 0;
 
@@ -258,7 +289,7 @@ class Program
 
         using var bitmap = new SKBitmap(converter.Width, converter.Height);
         using var canvas = new SKCanvas(bitmap);
-        canvas.Clear(SKColors.White);
+        canvas.Clear(colors.Background);
 
         // Sort by Color
         var selectedWays = ways.Where(way => way.Visible).ToArray();
@@ -287,7 +318,7 @@ class Program
             }
 
             // Now we can paint
-            paint.Color = Lerp(colorStart, colorEnd, way.Color);
+            paint.Color = Lerp(colors.Secondary, colors.Main, way.Color);
             paint.StrokeWidth = way.Weight;
 
             canvas.DrawPath(path, paint);
