@@ -66,19 +66,19 @@ class Program
         var colorMainOption = new Option<string>(
             name: "--color-main",
             description: "Color of the main line as hex value",
-            getDefaultValue: () => SKColors.RoyalBlue.ToString()
+            getDefaultValue: () => "FFBA4A"
         );
 
         var colorSecondaryOption = new Option<string>(
             name: "--color-secondary",
             description: "Color of the secondary line as hex value",
-            getDefaultValue: () => SKColors.DarkGreen.ToString()
+            getDefaultValue: () => "D5B690"
         );
 
         var colorBackgroundOption = new Option<string>(
             name: "--color-background",
             description: "Color of the background as hex value",
-            getDefaultValue: () => SKColors.White.ToString()
+            getDefaultValue: () => "1E1414"
         );
 
         var rootCommand = new RootCommand("Sample app for System.CommandLine");
