@@ -3,6 +3,7 @@ using System.Data;
 using OsmSharp.Streams;
 using SkiaSharp;
 using TRAINer.Data;
+using TRAINer.Geo;
 
 class Program
 {
@@ -36,28 +37,63 @@ class Program
             },
             isDefault: true
         );
+
+        var minLatOption = new Option<float>(
+            name: "--min-lat",
+            description: "Minimum latitude to include in the output",
+            getDefaultValue: () => -90
+        );
+
+        var maxLatOption = new Option<float>(
+            name: "--max-lat",
+            description: "Maximum latitude to include in the output",
+            getDefaultValue: () => 90
+        );
+
+        var minLonOption = new Option<float>(
+            name: "--min-lon",
+            description: "Minimum longitude to include in the output",
+            getDefaultValue: () => -180
+        );
+
+        var maxLonOption = new Option<float>(
+            name: "--max-lon",
+            description: "Maximum longitude to include in the output",
+            getDefaultValue: () => 180
+        );
+
         var rootCommand = new RootCommand("Sample app for System.CommandLine");
         rootCommand.AddOption(dataOption);
+        rootCommand.AddOption(minLatOption);
+        rootCommand.AddOption(maxLatOption);
+        rootCommand.AddOption(minLonOption);
+        rootCommand.AddOption(maxLonOption);
 
         rootCommand.SetHandler(
-            (data) =>
+            (data, minLat, maxLat, minLon, maxLon) =>
             {
                 if (data == null)
                 {
                     Console.Error.WriteLine("No data directory specified");
                     return;
                 }
-                Process(data);
+                Process(data, new Limits(minLat, maxLat, minLon, maxLon));
             },
-            dataOption
+            dataOption,
+            minLatOption,
+            maxLatOption,
+            minLonOption,
+            maxLonOption
         );
         return await rootCommand.InvokeAsync(args);
     }
 
-    internal static void Process(DirectoryInfo dataFolder)
+    internal static void Process(DirectoryInfo dataFolder, Limits limits)
     {
         // Find raw rails file. You can generate it from the OSM data using osmium
-        // osmium tags-filter -o rails.osm.pbf -t --output-format pbf,add_metadata=false rails_bak.osm.pbf "w/railway=bridge,goods,light_rail,monorail,narrow_gauge,rail,subway,tram"
+        // osmium tags-filter -o temp1.osm.pbf -t --output-format pbf,add_metadata=false europe-latest.osm.pbf "w/railway=bridge,goods,light_rail,monorail,narrow_gauge,rail,subway,tram"
+        // osmium tags-filter -o temp2.osm.pbf -t --output-format pbf,add_metadata=false temp1.osm.pbf -i "w/railway:preserved=yes"
+        // osmium tags-filter -o rails.osm.pbf -t --output-format pbf,add_metadata=false temp2.osm.pbf "w/railway=bridge,goods,light_rail,monorail,narrow_gauge,rail,subway,tram"
 
         // All railway types: rail, abandoned, subway, light_rail, razed, funicular, tram,
         // narrow_gauge, disused, construction, dismantled, platform, miniature, proposed, historic,
@@ -96,7 +132,7 @@ class Program
             return;
         }
 
-        var (nodes, ways) = GetData(file);
+        var (nodes, ways) = GetData(file, limits);
 
         Console.Error.WriteLine($"Found {nodes.Count} nodes and {ways.Length} ways");
 
@@ -111,10 +147,11 @@ class Program
         PaintPng(latexFile, nodes, ways);
     }
 
-    internal static (Dictionary<long, Node> nodes, Way[] ways) GetData(FileInfo file)
+    internal static (Dictionary<long, Node> nodes, Way[] ways) GetData(FileInfo file, Limits limits)
     {
         Dictionary<long, Node> nodes = [];
         List<Way> ways = [];
+        HashSet<long> removedNodes = [];
 
         var source = new PBFOsmStreamSource(file.OpenRead());
         int count = 0;
@@ -134,6 +171,12 @@ class Program
                     continue;
                 }
 
+                if (!limits.IsInside((float)node.Latitude.Value, (float)node.Longitude.Value))
+                {
+                    removedNodes.Add(node.Id.Value);
+                    continue;
+                }
+
                 var ourNode = new Node((float)node.Latitude.Value, (float)node.Longitude.Value);
                 nodes.Add(node.Id.Value, ourNode);
             }
@@ -145,7 +188,9 @@ class Program
                     continue;
                 }
 
-                if (way.Nodes.Length < 2)
+                var wayNodes = way.Nodes.Where(nodeId => !removedNodes.Contains(nodeId)).ToArray();
+
+                if (wayNodes.Length < 2)
                 {
                     continue;
                 }
@@ -153,10 +198,10 @@ class Program
                 Way? ourWay = null;
                 if (way.Tags != null && way.Tags.ContainsKey("railway"))
                 {
-                    ourWay = new RailWay(way.Id.Value, way.Nodes, way.Tags);
+                    ourWay = new RailWay(way.Id.Value, wayNodes, way.Tags);
                 }
 
-                ways.Add(ourWay ?? new Way(way.Id.Value, way.Nodes));
+                ways.Add(ourWay ?? new Way(way.Id.Value, wayNodes));
             }
 
             if (++count % 200000 == 0)
@@ -164,8 +209,23 @@ class Program
                 Console.Error.Write($"\rProcessed {count, 12:N0} elements");
             }
         }
+
+        // Check all the ways again for removed nodes
+        var arrWays = ways.Select(way =>
+            {
+                var newNodes = way.Nodes.Where(nodeId => nodes.ContainsKey(nodeId)).ToArray();
+                if (newNodes.Length < 2)
+                    return null;
+
+                way.Nodes = newNodes;
+                return way;
+            })
+            .Where(way => way != null)
+            .Cast<Way>()
+            .ToArray();
+
         Console.Error.WriteLine();
-        return (nodes, ways.ToArray());
+        return (nodes, arrWays);
     }
 
     internal static void PaintPng(FileInfo file, Dictionary<long, Node> nodes, Way[] ways)
@@ -205,19 +265,25 @@ class Program
         Array.Sort(selectedWays, (a, b) => a.Color.CompareTo(b.Color));
         foreach (var way in selectedWays)
         {
-            var points = way
-                .Nodes.Select(nodeId =>
-                {
-                    var (x, y) = converter.Convert(nodes[nodeId]);
-                    return new SKPoint(x, y);
-                })
-                .ToArray();
-
-            var path = new SKPath();
-            path.MoveTo(points[0]);
-            for (int i = 1; i < points.Length; i++)
+            var points = way.Nodes.Select(nodeId =>
             {
-                path.LineTo(points[i]);
+                var (x, y) = converter.Convert(nodes[nodeId]);
+                return new SKPoint(x, y);
+            });
+
+            bool first = true;
+            var path = new SKPath();
+
+            foreach (var point in points)
+            {
+                if (first)
+                {
+                    first = false;
+                    path.MoveTo(point);
+                    continue;
+                }
+
+                path.LineTo(point);
             }
 
             // Now we can paint

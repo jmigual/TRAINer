@@ -5,7 +5,7 @@ namespace TRAINer.Data;
 public class Way
 {
     public long Id { get; }
-    public long[] Nodes { get; }
+    public long[] Nodes { get; set; }
     public Way(long id, long[] nodes)
     {
         Id = id;

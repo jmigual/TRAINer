@@ -39,7 +39,7 @@ public class RailWay : Way
         {
             // This way, we can distinguish visually between narrow gauge and standard gauge
             // as well as between high speed and low speed lines
-            return 200 + 10 * (Math.Clamp(Speed, MinSpeed, MaxSpeed) - MinSpeed) / (MaxSpeed - MinSpeed) + 5 * (Math.Clamp(Gauge, MinGauge, MaxGauge) - MinGauge) / (MaxGauge - MinGauge);
+            return 3 + 10 * (Math.Clamp(Speed, MinSpeed, MaxSpeed) - MinSpeed) / (MaxSpeed - MinSpeed) + 5 * (Math.Clamp(Gauge, MinGauge, MaxGauge) - MinGauge) / (MaxGauge - MinGauge);
         }
     }
 
