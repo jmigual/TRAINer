@@ -217,9 +217,7 @@ class Program
                     continue;
                 }
 
-                var wayNodes = way.Nodes.Where(nodeId => !removedNodes.Contains(nodeId)).ToArray();
-
-                if (wayNodes.Length < 2)
+                if (way.Nodes.Length < 2)
                 {
                     continue;
                 }
@@ -227,10 +225,10 @@ class Program
                 Way? ourWay = null;
                 if (way.Tags != null && way.Tags.ContainsKey("railway"))
                 {
-                    ourWay = new RailWay(way.Id.Value, wayNodes, way.Tags);
+                    ourWay = new RailWay(way.Id.Value, way.Nodes, way.Tags);
                 }
 
-                ways.Add(ourWay ?? new Way(way.Id.Value, wayNodes));
+                ways.Add(ourWay ?? new Way(way.Id.Value, way.Nodes));
             }
 
             if (++count % 200000 == 0)
@@ -242,7 +240,7 @@ class Program
         // Check all the ways again for removed nodes
         var arrWays = ways.Select(way =>
             {
-                var newNodes = way.Nodes.Where(nodeId => nodes.ContainsKey(nodeId)).ToArray();
+                var newNodes = way.Nodes.Where(nodeId => !removedNodes.Contains(nodeId)).ToArray();
                 if (newNodes.Length < 2)
                     return null;
 
@@ -267,15 +265,13 @@ class Program
         Console.Error.WriteLine($"Gauges: {RailWay.MinGauge} - {RailWay.MaxGauge}");
         Console.Error.WriteLine($"Speeds: {RailWay.MinSpeed} - {RailWay.MaxSpeed}");
 
-        var converter = new TRAINer.Geo.GPSToCanvas(20000, 20000);
-
+        var converter = new GPSToCanvas(20000, 20000);
         foreach (var node in nodes.Values)
         {
             converter.AddNode(node);
         }
 
         int count = 0;
-
         var paint = new SKPaint
         {
             Style = SKPaintStyle.Stroke,
@@ -296,17 +292,15 @@ class Program
         Array.Sort(selectedWays, (a, b) => a.Color.CompareTo(b.Color));
         foreach (var way in selectedWays)
         {
-            var points = way.Nodes.Select(nodeId =>
-            {
-                var (x, y) = converter.Convert(nodes[nodeId]);
-                return new SKPoint(x, y);
-            });
-
             bool first = true;
             var path = new SKPath();
 
-            foreach (var point in points)
+            foreach (var nodeId in way.Nodes)
             {
+                var node = nodes[nodeId];
+                var (x, y) = converter.Convert(node);
+                var point = new SKPoint(x, y);
+
                 if (first)
                 {
                     first = false;
@@ -318,7 +312,7 @@ class Program
             }
 
             // Now we can paint
-            paint.Color = Lerp(colors.Secondary, colors.Main, way.Color);
+            paint.Color = colors.GetMix(way.Color);
             paint.StrokeWidth = way.Weight;
 
             canvas.DrawPath(path, paint);
@@ -336,17 +330,5 @@ class Program
         using var data = image.Encode(SKEncodedImageFormat.Png, 80);
         using var stream = File.OpenWrite(file.FullName);
         data.SaveTo(stream);
-    }
-
-    internal static SKColor Lerp(SKColor cA, SKColor cB, float fraction)
-    {
-        fraction = Math.Clamp(fraction, 0, 1);
-
-        var r = (byte)(cA.Red + (cB.Red - cA.Red) * fraction);
-        var g = (byte)(cA.Green + (cB.Green - cA.Green) * fraction);
-        var b = (byte)(cA.Blue + (cB.Blue - cA.Blue) * fraction);
-        var a = (byte)(cA.Alpha + (cB.Alpha - cA.Alpha) * fraction);
-
-        return new SKColor(r, g, b, a);
     }
 }

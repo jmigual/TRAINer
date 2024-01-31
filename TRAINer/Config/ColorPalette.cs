@@ -14,4 +14,16 @@ public class ColorPalette
         Secondary = SkiaSharp.SKColor.Parse(secondary);
         Background = SkiaSharp.SKColor.Parse(background);
     }
+
+    public SkiaSharp.SKColor GetMix(float fraction)
+    {
+        fraction = Math.Clamp(fraction, 0, 1);
+
+        var r = (byte)(Main.Red + (Secondary.Red - Main.Red) * fraction);
+        var g = (byte)(Main.Green + (Secondary.Green - Main.Green) * fraction);
+        var b = (byte)(Main.Blue + (Secondary.Blue - Main.Blue) * fraction);
+        var a = (byte)(Main.Alpha + (Secondary.Alpha - Main.Alpha) * fraction);
+
+        return new SkiaSharp.SKColor(r, g, b, a);
+    }
 }

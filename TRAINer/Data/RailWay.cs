@@ -5,7 +5,6 @@ namespace TRAINer.Data;
 
 public class RailWay : Way
 {
-
     public enum RailWayType
     {
         Unknown,
@@ -39,7 +38,9 @@ public class RailWay : Way
         {
             // This way, we can distinguish visually between narrow gauge and standard gauge
             // as well as between high speed and low speed lines
-            return 3 + 10 * (Math.Clamp(Speed, MinSpeed, MaxSpeed) - MinSpeed) / (MaxSpeed - MinSpeed) + 5 * (Math.Clamp(Gauge, MinGauge, MaxGauge) - MinGauge) / (MaxGauge - MinGauge);
+            return 3
+                + 20 * (Math.Clamp(Speed, MinSpeed, MaxSpeed) - MinSpeed) / (MaxSpeed - MinSpeed)
+                + 5 * (Math.Clamp(Gauge, MinGauge, MaxGauge) - MinGauge) / (MaxGauge - MinGauge);
         }
     }
 
@@ -53,7 +54,8 @@ public class RailWay : Way
         }
     }
 
-    public RailWay(long id, long[] nodes, TagsCollectionBase? tags) : base(id, nodes)
+    public RailWay(long id, long[] nodes, TagsCollectionBase? tags)
+        : base(id, nodes)
     {
         if (tags == null)
         {
