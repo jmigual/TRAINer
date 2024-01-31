@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <PackageReference Include="OsmSharp" Version="6.2.0" />
+    <PackageReference Include="SkiaSharp" Version="2.88.7" />
     <PackageReference Include="System.CommandLine" Version="2.0.0-beta4.22272.1" />
   </ItemGroup>
 

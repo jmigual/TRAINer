@@ -19,13 +19,13 @@ public class RailWay : Way
 
     public float Gauge { get; } = 0;
 
-    public float Weight
+    public override float Weight
     {
         get
         {
             // This way, we can distinguish visually between narrow gauge and standard gauge
             // as well as between high speed and low speed lines
-            return 1 + Speed / 300 + Gauge / 1400;
+            return 1 + (Speed - MinSpeed) / (MaxSpeed - MinSpeed) + (Gauge - MinGauge) / (MaxGauge - MinGauge);
         }
     }
 
@@ -64,4 +64,6 @@ public class RailWay : Way
             }
         }
     }
+
+    public override bool Visible => true;
 }

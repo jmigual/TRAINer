@@ -1,5 +1,6 @@
 ﻿using System.CommandLine;
 using OsmSharp.Streams;
+using SkiaSharp;
 using TRAINer.Data;
 
 class Program
@@ -60,7 +61,17 @@ class Program
 
         var (nodes, ways) = GetData(file);
 
+        Console.Error.WriteLine($"Found {nodes.Count} nodes and {ways.Length} ways");
+
         // Now we need to paint the data
+        DirectoryInfo latexFolder = new DirectoryInfo(Path.Combine(dataFolder.FullName, "latex"));
+        if (!latexFolder.Exists)
+        {
+            latexFolder.Create();
+        }
+
+        var latexFile = new FileInfo(Path.Combine(latexFolder.FullName, "rails.png"));
+        PaintPng(latexFile, nodes, ways);
     }
 
     internal static (Dictionary<long, Node> nodes, Way[] ways) GetData(FileInfo file)
@@ -70,6 +81,7 @@ class Program
 
         var source = new PBFOsmStreamSource(file.OpenRead());
         int count = 0;
+
         foreach (var element in source)
         {
             if (element.Type == OsmSharp.OsmGeoType.Node)
@@ -86,7 +98,7 @@ class Program
                     tags.Add("railway", railway);
                 }
 
-                var ourNode = new Node(node.Id.Value, node.Latitude.Value, node.Longitude.Value, node.Tags);
+                var ourNode = new Node((float)node.Latitude.Value, (float)node.Longitude.Value, node.Tags);
                 nodes.Add(node.Id.Value, ourNode);
             }
             else if (element.Type == OsmSharp.OsmGeoType.Way)
@@ -108,9 +120,81 @@ class Program
 
             if (++count % 200000 == 0)
             {
-                Console.Error.WriteLine($"Processed {count} elements");
+                Console.Error.WriteLine($"Processed {count:N0} elements");
             }
         }
         return (nodes, ways.ToArray());
+    }
+
+    internal static void PaintPng(FileInfo file, Dictionary<long, Node> nodes, Way[] ways)
+    {
+        // Find the bounding box
+        float minLat = float.PositiveInfinity;
+        float maxLat = float.NegativeInfinity;
+        float minLon = float.PositiveInfinity;
+        float maxLon = float.NegativeInfinity;
+
+        foreach (var node in nodes.Values)
+        {
+            minLat = Math.Min(minLat, node.Latitude);
+            maxLat = Math.Max(maxLat, node.Latitude);
+            minLon = Math.Min(minLon, node.Longitude);
+            maxLon = Math.Max(maxLon, node.Longitude);
+        }
+
+        // Add some margin
+        minLat -= 0.1f;
+        maxLat += 0.1f;
+        minLon -= 0.1f;
+        maxLon += 0.1f;
+
+        float earthHorizontalPointDistance = 40075.0f / 360.0f;
+        float earthVerticalPointDistance = 40007.0f / 360.0f;
+
+        float ratio = 1;
+
+        // Now we can paint
+        var width = 10000;
+        var height = (int)(width * ratio);
+        using var bitmap = new SKBitmap(width, height);
+        using var canvas = new SKCanvas(bitmap);
+        canvas.Clear(SKColors.White);
+
+        int count = 0;
+        foreach (var way in ways)
+        {
+            if (!way.Visible)
+            {
+                continue;
+            }
+            var points = way.Nodes.Select(nodeId => nodes[nodeId]).Select(node => new SKPoint((node.Longitude - minLon) / (maxLon - minLon) * width, height - ((node.Latitude - minLat) / (maxLat - minLat) * height))).ToArray();
+            // Convert these points to a path
+            var path = new SKPath();
+            path.MoveTo(points[0]);
+            for (int i = 1; i < points.Length; i++)
+            {
+                path.LineTo(points[i]);
+            }
+
+            // Now we can paint
+            var paint = new SKPaint
+            {
+                Style = SKPaintStyle.Stroke,
+                Color = SKColors.Black,
+                StrokeWidth = way.Weight,
+                IsAntialias = true
+            };
+            canvas.DrawPath(path, paint);
+
+            if (++count % 10000 == 0)
+            {
+                Console.Error.WriteLine($"Painted {count:N0} ways");
+            }
+        }
+
+        using var image = SKImage.FromBitmap(bitmap);
+        using var data = image.Encode(SKEncodedImageFormat.Png, 100);
+        using var stream = File.OpenWrite(file.FullName);
+        data.SaveTo(stream);
     }
 }

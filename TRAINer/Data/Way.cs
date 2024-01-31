@@ -13,4 +13,8 @@ public class Way
         Nodes = nodes;
         Tags = [];
     }
+
+    public virtual bool Visible => false;
+
+    public virtual float Weight { get { return 0; } }
 }
