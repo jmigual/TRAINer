@@ -5,6 +5,20 @@ namespace TRAINer.Data;
 
 public class RailWay : Way
 {
+
+    public enum RailWayType
+    {
+        Unknown,
+        Rail,
+        Bridge,
+        Station,
+        Tram,
+        Subway,
+        LightRail,
+        Monorail,
+        Goods
+    }
+
     public static float MaxSpeed { get; protected set; } = 0;
 
     public static float MinSpeed { get; protected set; } = float.PositiveInfinity;
@@ -17,7 +31,7 @@ public class RailWay : Way
 
     public float Gauge { get; } = 0;
 
-    public string Railway { get; } = "";
+    public RailWayType Railway { get; } = RailWayType.Unknown;
 
     public override float Weight
     {
@@ -25,7 +39,7 @@ public class RailWay : Way
         {
             // This way, we can distinguish visually between narrow gauge and standard gauge
             // as well as between high speed and low speed lines
-            return 2 + 10 * (Math.Clamp(Speed, MinSpeed, MaxSpeed) - MinSpeed) / (MaxSpeed - MinSpeed) + 5 * (Math.Clamp(Gauge, MinGauge, MaxGauge) - MinGauge) / (MaxGauge - MinGauge);
+            return 200 + 10 * (Math.Clamp(Speed, MinSpeed, MaxSpeed) - MinSpeed) / (MaxSpeed - MinSpeed) + 5 * (Math.Clamp(Gauge, MinGauge, MaxGauge) - MinGauge) / (MaxGauge - MinGauge);
         }
     }
 
@@ -39,7 +53,7 @@ public class RailWay : Way
         }
     }
 
-    public RailWay(long id, long[] nodes, TagsCollectionBase? tags) : base(id, nodes, tags)
+    public RailWay(long id, long[] nodes, TagsCollectionBase? tags) : base(id, nodes)
     {
         if (tags == null)
         {
@@ -68,7 +82,33 @@ public class RailWay : Way
 
         if (tags.TryGetValue("railway", out var railway))
         {
-            Railway = railway;
+            switch (railway)
+            {
+                case "bridge":
+                    Railway = RailWayType.Bridge;
+                    break;
+                case "goods":
+                    Railway = RailWayType.Goods;
+                    break;
+                case "light_rail":
+                    Railway = RailWayType.LightRail;
+                    break;
+                case "monorail":
+                    Railway = RailWayType.Monorail;
+                    break;
+                case "rail":
+                    Railway = RailWayType.Rail;
+                    break;
+                case "station":
+                    Railway = RailWayType.Station;
+                    break;
+                case "subway":
+                    Railway = RailWayType.Subway;
+                    break;
+                case "tram":
+                    Railway = RailWayType.Tram;
+                    break;
+            }
         }
     }
 
