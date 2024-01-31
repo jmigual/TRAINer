@@ -17,4 +17,6 @@ public class Way
     public virtual bool Visible => false;
 
     public virtual float Weight { get { return 0; } }
+
+    public virtual float Color { get { return 0; } }
 }

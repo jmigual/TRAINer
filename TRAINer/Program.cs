@@ -51,6 +51,27 @@ class Program
     {
         // Find raw rails file. You can generate it from the OSM data using osmium
         // osmium tags-filter -o rails.osm.pbf planet-latest.osm.pbf railway "r/admin_level=2,4" --output-format pbf,add_metadata=false
+
+        // All railway types: rail, abandoned, subway, light_rail, razed, funicular, tram, narrow_gauge, disused, construction,
+        // dismantled, platform, miniature, proposed, historic, overline_bridge, depot, workshop, monorail, roundhouse,
+        // turntable, platform_edge, ferry, station, museum, preserved, wash, signal_box, yard, engine_shed, stop, service_station,
+        // ventilation_shaft, halt;station, loading_ramp, container_terminal, disused_station, no, train_depot, a, signal_bridge,
+        // traverser, subway_entrance, historic_path, ticket_office, goods, interlocking, site, historic_station, level_crossing,
+        // water_tower, crossing_box, goods_shed, transfer_shed, coaling_facility, halt, demolished, terminal, planned, technical_center,
+        // DE, crossover, yes, crossing, unused, gauge_conversion, train_station_entrance, facility, trolley_rails, works, tram_stop, service,
+        // blockpost, station_site, fuel, station_area, control_tower, signal_box_site, track_diagram, bridge, waiting_room, approved, signal_box;crossing_box,
+        // terminal_site, phone, interlocking_tower, junction, incline, funicular_entrance, engine shed, switch, store, water_crane, overbridge, spur_junction,
+        // buffer_stop, tram_level_crossing, crossing_controller, miniature_facility, watchmans_house, air_shaft, station_master, crane_rail,
+        // power_mast, never_built, storage, gantry, pit, single_rail, meadow, Wendeanlage, elevator, crane, track_ballast, ground_frame, office,
+        // Ortsstellbereich, tram_crossing, shed, uncompleted, Hilfshandlungstafel, signalbox, waste_disposal, Rangierbezirk,
+        // track_scale, loading_gauge, communication, electric_supply, compressed_air_supply, sand_store, abandoned:cableway,
+        // booth, technical_station, cranetrack, driveway, 4, disused_platform, ticket_hall, radio, jetty, model, residential, hyperloop,
+        // ticket office, loading_rack, loading_zone, abandoned;razed, boat_slipway, abandoned:platform, level, modeltrain, Retarder,
+        // weight, railway_crossing, storage_area, switchgear, underline_bridge, 16, debris_pile, shop, Construction, monorack, recovery_train,
+        // *, disused:station, ash_pit, telephone, without, signal, train, industrial_rail, proposed:platform, station_building, abandoned:rail, loading_dock
+
+        // Important tags: rail,subway,light_rail,tram,narrow_gauge,bridge,goods,monorail
+
         var file = new FileInfo(Path.Combine(dataFolder.FullName, "raw", "rails.osm.pbf"));
 
         if (!file.Exists)
@@ -64,13 +85,13 @@ class Program
         Console.Error.WriteLine($"Found {nodes.Count} nodes and {ways.Length} ways");
 
         // Now we need to paint the data
-        DirectoryInfo latexFolder = new DirectoryInfo(Path.Combine(dataFolder.FullName, "latex"));
-        if (!latexFolder.Exists)
+        DirectoryInfo output = new DirectoryInfo(Path.Combine(dataFolder.FullName, "output"));
+        if (!output.Exists)
         {
-            latexFolder.Create();
+            output.Create();
         }
 
-        var latexFile = new FileInfo(Path.Combine(latexFolder.FullName, "rails.png"));
+        var latexFile = new FileInfo(Path.Combine(output.FullName, "rails.png"));
         PaintPng(latexFile, nodes, ways);
     }
 
@@ -128,9 +149,13 @@ class Program
 
     internal static void PaintPng(FileInfo file, Dictionary<long, Node> nodes, Way[] ways)
     {
+        Console.Error.WriteLine($"Gauges: {RailWay.MinGauge} - {RailWay.MaxGauge}");
+        Console.Error.WriteLine($"Speeds: {RailWay.MinSpeed} - {RailWay.MaxSpeed}");
+
         // Find the bounding box
         float minLat = float.PositiveInfinity;
         float maxLat = float.NegativeInfinity;
+        float minAbsLat = float.PositiveInfinity;
         float minLon = float.PositiveInfinity;
         float maxLon = float.NegativeInfinity;
 
@@ -140,33 +165,41 @@ class Program
             maxLat = Math.Max(maxLat, node.Latitude);
             minLon = Math.Min(minLon, node.Longitude);
             maxLon = Math.Max(maxLon, node.Longitude);
+            minAbsLat = Math.Min(minAbsLat, Math.Abs(node.Latitude));
         }
 
-        // Add some margin
-        minLat -= 0.1f;
-        maxLat += 0.1f;
-        minLon -= 0.1f;
-        maxLon += 0.1f;
+        // Calculate the horizontal distance in meters
+        var horizontalDistance = (float)(Math.Cos(minAbsLat * Math.PI / 180) * 6371000 * (maxLon - minLon) * Math.PI / 180);
+        // Calculate the vertical distance in meters
+        var verticalDistance = (float)(6371000 * (maxLat - minLat) * Math.PI / 180);
 
-        float earthHorizontalPointDistance = 40075.0f / 360.0f;
-        float earthVerticalPointDistance = 40007.0f / 360.0f;
+        float ratio = verticalDistance / horizontalDistance;
 
-        float ratio = 1;
+        var colorStart = SKColors.DarkGreen;
+        var colorEnd = SKColors.RoyalBlue;
+
+        int count = 0;
+
+        var paint = new SKPaint
+            {
+                Style = SKPaintStyle.Stroke,
+                StrokeCap = SKStrokeCap.Round,
+                StrokeJoin = SKStrokeJoin.Round,
+                IsAntialias = true
+            };
 
         // Now we can paint
-        var width = 10000;
+        var width = 20000;
         var height = (int)(width * ratio);
         using var bitmap = new SKBitmap(width, height);
         using var canvas = new SKCanvas(bitmap);
         canvas.Clear(SKColors.White);
 
-        int count = 0;
-        foreach (var way in ways)
+        // Sort by Color
+        var selectedWays = ways.Where(way => way.Visible).ToArray();
+        Array.Sort(selectedWays, (a, b) => a.Color.CompareTo(b.Color));
+        foreach (var way in selectedWays)
         {
-            if (!way.Visible)
-            {
-                continue;
-            }
             var points = way.Nodes.Select(nodeId => nodes[nodeId]).Select(node => new SKPoint((node.Longitude - minLon) / (maxLon - minLon) * width, height - ((node.Latitude - minLat) / (maxLat - minLat) * height))).ToArray();
             // Convert these points to a path
             var path = new SKPath();
@@ -177,24 +210,31 @@ class Program
             }
 
             // Now we can paint
-            var paint = new SKPaint
-            {
-                Style = SKPaintStyle.Stroke,
-                Color = SKColors.Black,
-                StrokeWidth = way.Weight,
-                IsAntialias = true
-            };
+            paint.Color = Lerp(colorStart, colorEnd, way.Color);
+            paint.StrokeWidth = way.Weight;
+
             canvas.DrawPath(path, paint);
 
-            if (++count % 10000 == 0)
+            if (++count % 20000 == 0)
             {
                 Console.Error.WriteLine($"Painted {count:N0} ways");
             }
         }
 
         using var image = SKImage.FromBitmap(bitmap);
-        using var data = image.Encode(SKEncodedImageFormat.Png, 100);
+        using var data = image.Encode(SKEncodedImageFormat.Png, 80);
         using var stream = File.OpenWrite(file.FullName);
         data.SaveTo(stream);
+    }
+
+    internal static SKColor Lerp(SKColor cA, SKColor cB, float fraction) {
+        fraction = Math.Clamp(fraction, 0, 1);
+
+        var r = (byte)(cA.Red + (cB.Red - cA.Red) * fraction);
+        var g = (byte)(cA.Green + (cB.Green - cA.Green) * fraction);
+        var b = (byte)(cA.Blue + (cB.Blue - cA.Blue) * fraction);
+        var a = (byte)(cA.Alpha + (cB.Alpha - cA.Alpha) * fraction);
+
+        return new SKColor(r, g, b, a);
     }
 }

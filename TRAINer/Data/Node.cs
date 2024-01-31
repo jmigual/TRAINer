@@ -6,7 +6,8 @@ public class Node
 {
     public float Latitude { get; }
     public float Longitude { get; }
-    public Dictionary<string, string> Tags { get; }
+
+    public string RailWay { get; } = "";
 
     public static readonly string[] AcceptedTags = ["railway"];
 
@@ -14,19 +15,14 @@ public class Node
     {
         Latitude = latitude;
         Longitude = longitude;
-        Tags = [];
 
         if (tags == null)
         {
             return;
         }
-
-        foreach (var acceptedTag in AcceptedTags)
+        if (tags.TryGetValue("railway", out var value))
         {
-            if (tags.TryGetValue(acceptedTag, out var value))
-            {
-                Tags.Add(acceptedTag, value);
-            }
+            RailWay = value;
         }
     }
 }

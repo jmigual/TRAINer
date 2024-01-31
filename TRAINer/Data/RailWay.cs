@@ -5,8 +5,6 @@ namespace TRAINer.Data;
 
 public class RailWay : Way
 {
-    public static readonly string[] StoreTags = ["railway"];
-
     public static float MaxSpeed { get; protected set; } = 0;
 
     public static float MinSpeed { get; protected set; } = float.PositiveInfinity;
@@ -19,13 +17,25 @@ public class RailWay : Way
 
     public float Gauge { get; } = 0;
 
+    public string Railway { get; } = "";
+
     public override float Weight
     {
         get
         {
             // This way, we can distinguish visually between narrow gauge and standard gauge
             // as well as between high speed and low speed lines
-            return 1 + (Speed - MinSpeed) / (MaxSpeed - MinSpeed) + (Gauge - MinGauge) / (MaxGauge - MinGauge);
+            return 2 + 10 * (Math.Clamp(Speed, MinSpeed, MaxSpeed) - MinSpeed) / (MaxSpeed - MinSpeed) + 5 * (Math.Clamp(Gauge, MinGauge, MaxGauge) - MinGauge) / (MaxGauge - MinGauge);
+        }
+    }
+
+    public override float Color
+    {
+        get
+        {
+            // This way, we can distinguish visually between narrow gauge and standard gauge
+            // as well as between high speed and low speed lines
+            return (Gauge - MinGauge) / (MaxGauge - MinGauge);
         }
     }
 
@@ -41,8 +51,8 @@ public class RailWay : Way
             if (float.TryParse(gauge, out var gaugeValue))
             {
                 Gauge = gaugeValue;
-                MinGauge = Math.Min(MinGauge, gaugeValue);
-                MaxGauge = Math.Max(MaxGauge, gaugeValue);
+                MinGauge = Math.Max(Math.Min(MinGauge, gaugeValue), 800);
+                MaxGauge = Math.Min(Math.Max(MaxGauge, gaugeValue), 1700);
             }
         }
 
@@ -51,17 +61,14 @@ public class RailWay : Way
             if (float.TryParse(maxSpeed, out var speedValue))
             {
                 Speed = speedValue;
-                MinSpeed = Math.Min(MinSpeed, speedValue);
-                MaxSpeed = Math.Max(MaxSpeed, speedValue);
+                MinSpeed = Math.Max(Math.Min(MinSpeed, speedValue), 10);
+                MaxSpeed = Math.Min(Math.Max(MaxSpeed, speedValue), 400);
             }
         }
 
-        foreach (var acceptedTag in StoreTags)
+        if (tags.TryGetValue("railway", out var railway))
         {
-            if (tags.TryGetValue(acceptedTag, out var value))
-            {
-                Tags.Add(acceptedTag, value);
-            }
+            Railway = railway;
         }
     }
 
