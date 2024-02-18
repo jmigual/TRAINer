@@ -77,8 +77,10 @@ public class RailWay : Way
             if (float.TryParse(maxSpeed, out var speedValue))
             {
                 Speed = speedValue;
-                MinSpeed = Math.Max(Math.Min(MinSpeed, speedValue), 10);
-                MaxSpeed = Math.Min(Math.Max(MaxSpeed, speedValue), 400);
+                if (speedValue > 0 && speedValue < 400) {
+                    MinSpeed = Math.Max(Math.Min(MinSpeed, speedValue), 1);
+                    MaxSpeed = Math.Min(Math.Max(MaxSpeed, speedValue), 400);
+                }
             }
         }
 

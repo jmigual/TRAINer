@@ -1,4 +1,5 @@
 ﻿using System.CommandLine;
+using System.CommandLine.Invocation;
 using System.Data;
 using OsmSharp.Streams;
 using SkiaSharp;
@@ -81,6 +82,18 @@ class Program
             getDefaultValue: () => "1E1414"
         );
 
+        var marginOption = new Option<int>(
+            name: "--margin",
+            description: "Margin around the image in pixels",
+            getDefaultValue: () => 500
+        );
+
+        var shortestSideResolutionOption = new Option<int>(
+            name: "--shortest-side-resolution",
+            description: "Resolution of the shortest side of the image in pixels",
+            getDefaultValue: () => 20000
+        );
+
         var rootCommand = new RootCommand("Sample app for System.CommandLine");
         rootCommand.AddOption(dataOption);
         rootCommand.AddOption(minLatOption);
@@ -90,38 +103,66 @@ class Program
         rootCommand.AddOption(colorMainOption);
         rootCommand.AddOption(colorSecondaryOption);
         rootCommand.AddOption(colorBackgroundOption);
+        rootCommand.AddOption(marginOption);
+        rootCommand.AddOption(shortestSideResolutionOption);
 
         rootCommand.SetHandler(
-            (data, minLat, maxLat, minLon, maxLon, mainColor, secondaryColor, backgroundColor) =>
+            (InvocationContext context) =>
             {
+                var result = context.ParseResult;
+
+                var data = result.GetValueForOption(dataOption);
+                var minLat = result.GetValueForOption(minLatOption);
+                var maxLat = result.GetValueForOption(maxLatOption);
+                var minLon = result.GetValueForOption(minLonOption);
+                var maxLon = result.GetValueForOption(maxLonOption);
+                var mainColor = result.GetValueForOption(colorMainOption);
+                var secondaryColor = result.GetValueForOption(colorSecondaryOption);
+                var backgroundColor = result.GetValueForOption(colorBackgroundOption);
+                var margin = result.GetValueForOption(marginOption);
+                var resolution = result.GetValueForOption(shortestSideResolutionOption);
+
                 if (data == null)
                 {
                     Console.Error.WriteLine("No data directory specified");
                     return;
                 }
+
+                if (mainColor == null || secondaryColor == null || backgroundColor == null)
+                {
+                    Console.Error.WriteLine("Invalid color specified");
+                    return;
+                }
+
+                if (resolution == 0)
+                {
+                    Console.Error.WriteLine("Resolution cannot be 0");
+                    return;
+                }
+
                 Process(
                     data,
                     new Limits(minLat, maxLat, minLon, maxLon),
-                    new ColorPalette(mainColor, secondaryColor, backgroundColor)
+                    new ColorPalette(mainColor, secondaryColor, backgroundColor),
+                    margin,
+                    resolution
                 );
-            },
-            dataOption,
-            minLatOption,
-            maxLatOption,
-            minLonOption,
-            maxLonOption,
-            colorMainOption,
-            colorSecondaryOption,
-            colorBackgroundOption
+            }
         );
         return await rootCommand.InvokeAsync(args);
     }
 
-    internal static void Process(DirectoryInfo dataFolder, Limits limits, ColorPalette colors)
+    internal static void Process(
+        DirectoryInfo dataFolder,
+        Limits limits,
+        ColorPalette colors,
+        int margin,
+        int resolution
+    )
     {
         // Find raw rails file. You can generate it from the OSM data using osmium
-        // osmium tags-filter -o temp1.osm.pbf -t --output-format pbf,add_metadata=false europe-latest.osm.pbf "w/railway=bridge,goods,light_rail,monorail,narrow_gauge,rail,subway,tram"
-        // osmium tags-filter -o temp2.osm.pbf -t --output-format pbf,add_metadata=false temp1.osm.pbf -i "w/railway:preserved=yes"
+        // osmium tags-filter -o temp1.osm.pbf -t --output-format pbf,add_metadata=false europe-latest.osm.pbf "w/railway"
+        // osmium tags-filter -o temp2.osm.pbf -t --output-format pbf,add_metadata=false temp1.osm.pbf -i "w/abandoned=yes" "w/abandoned:*" "w/disused=yes" "w/disused:*"
         // osmium tags-filter -o rails.osm.pbf -t --output-format pbf,add_metadata=false temp2.osm.pbf "w/railway=bridge,goods,light_rail,monorail,narrow_gauge,rail,subway,tram"
 
         // All railway types: rail, abandoned, subway, light_rail, razed, funicular, tram,
@@ -173,7 +214,7 @@ class Program
         }
 
         var latexFile = new FileInfo(Path.Combine(output.FullName, "rails.png"));
-        PaintPng(latexFile, nodes, ways, colors);
+        PaintPng(latexFile, nodes, ways, colors, margin, resolution);
     }
 
     internal static (Dictionary<long, Node> nodes, Way[] ways) GetData(FileInfo file, Limits limits)
@@ -236,6 +277,7 @@ class Program
                 Console.Error.Write($"\rProcessed {count, 12:N0} elements");
             }
         }
+        Console.Error.Write($"\rProcessed {count, 12:N0} elements");
 
         // Check all the ways again for removed nodes
         var arrWays = ways.Select(way =>
@@ -259,13 +301,15 @@ class Program
         FileInfo file,
         Dictionary<long, Node> nodes,
         Way[] ways,
-        ColorPalette colors
+        ColorPalette colors,
+        int margin,
+        int resolution
     )
     {
         Console.Error.WriteLine($"Gauges: {RailWay.MinGauge} - {RailWay.MaxGauge}");
         Console.Error.WriteLine($"Speeds: {RailWay.MinSpeed} - {RailWay.MaxSpeed}");
 
-        var converter = new GPSToCanvas(20000, 20000);
+        var converter = new GPSToCanvas(resolution, resolution, margin);
         foreach (var node in nodes.Values)
         {
             converter.AddNode(node);
@@ -280,10 +324,14 @@ class Program
             IsAntialias = true
         };
 
-        var width = converter.Width;
-        var height = converter.Height;
+        var width = converter.RealWidth;
+        var height = converter.RealHeight;
 
-        using var bitmap = new SKBitmap(converter.Width, converter.Height);
+        Console.Error.WriteLine(
+            $"Creating image of {width}x{height} with data resolution {converter.Width}x{converter.Height}"
+        );
+
+        using var bitmap = new SKBitmap(width, height);
         using var canvas = new SKCanvas(bitmap);
         canvas.Clear(colors.Background);
 
@@ -322,6 +370,7 @@ class Program
                 Console.Error.Write($"\rPainted {count, 12:N0} ways");
             }
         }
+        Console.Error.Write($"\rPainted {count, 12:N0} ways");
 
         Console.Error.WriteLine();
         Console.Error.WriteLine("Saving image");

@@ -2,7 +2,7 @@ using TRAINer.Data;
 
 namespace TRAINer.Geo;
 
-class GPSToCanvas(int width, int height)
+class GPSToCanvas(int width, int height, int margin)
 {
     public float? MinLat { get; private set; }
     public float? MaxLat { get; private set; }
@@ -11,31 +11,15 @@ class GPSToCanvas(int width, int height)
     public float? MinLon { get; private set; }
     public float? MaxLon { get; private set; }
 
-    public int Width
-    {
-        get
-        {
-            // We always grow the smallest dimension unless they are the same. Then we keep the
-            // original width.
-            if (_width <= _height)
-            {
-                return (int)(_height * (Ratio ?? 1));
-            }
-            return (int)_width;
-        }
-    }
+    public int Margin { get; private set; } = margin;
 
-    public int Height
-    {
-        get
-        {
-            if (_width > _height)
-            {
-                return (int)(_width / (Ratio ?? 1));
-            }
-            return (int)_height;
-        }
-    }
+    public int Width { get; private set; } = width - 2 * margin;
+
+    public int Height { get; private set; } = height - 2 * margin;
+
+    public int RealWidth { get; private set; } = width;
+
+    public int RealHeight { get; private set; } = height;
 
     public void AddNode(Node node)
     {
@@ -52,6 +36,34 @@ class GPSToCanvas(int width, int height)
             MinLon = node.Longitude;
         if (node.Longitude > MaxLon || MaxLon == null)
             MaxLon = node.Longitude;
+
+        var horizontalDistance = (float)(
+            Math.Cos((double)MinAbsLat * Math.PI / 180)
+            * 6371000
+            * (MaxLon - MinLon)
+            * Math.PI
+            / 180
+        );
+        var verticalDistance = (float)(6371000 * (MaxLat - MinLat) * Math.PI / 180);
+
+        Ratio = horizontalDistance / verticalDistance;
+
+        if (_width < _height)
+        {
+            Width = (int)((_height - 2 * Margin) * (Ratio ?? 1));
+            Height = (int)(_width - 2 * Margin);
+
+            RealWidth = (int)(_height * (Ratio ?? 1));
+            RealHeight = (int)_height;
+        }
+        else
+        {
+            Width = (int)(_width - 2 * Margin);
+            Height = (int)((_width - 2 * Margin) / (Ratio ?? 1));
+
+            RealWidth = (int)_width;
+            RealHeight = (int)(_width / (Ratio ?? 1));
+        }
     }
 
     public (float, float) Convert(Node node)
@@ -67,39 +79,16 @@ class GPSToCanvas(int width, int height)
             throw new InvalidOperationException("Not all values are set");
         }
 
-        var x = (float)((node.Longitude - MinLon) * Width / (MaxLon - MinLon));
-        var y = Height - (float)((node.Latitude - MinLat) * Height / (MaxLat - MinLat));
+        var x = (float)((node.Longitude - MinLon) * Width / (MaxLon - MinLon) + Margin);
+
+        // Y axis goes from top to bottom
+        var y =
+            RealHeight - (float)((node.Latitude - MinLat) * Height / (MaxLat - MinLat) + Margin);
 
         return (x, y);
     }
 
-    private float? Ratio
-    {
-        get
-        {
-            if (
-                MinLon == null
-                || MaxLon == null
-                || MinAbsLat == null
-                || MinLat == null
-                || MaxLat == null
-            )
-            {
-                return null;
-            }
-
-            var horizontalDistance = (float)(
-                Math.Cos((double)MinAbsLat * Math.PI / 180)
-                * 6371000
-                * (MaxLon - MinLon)
-                * Math.PI
-                / 180
-            );
-            var verticalDistance = (float)(6371000 * (MaxLat - MinLat) * Math.PI / 180);
-
-            return horizontalDistance / verticalDistance;
-        }
-    }
+    private float? Ratio;
 
     private float _width = width;
 
